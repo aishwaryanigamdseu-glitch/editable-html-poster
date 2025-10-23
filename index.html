@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Editable HTML Poster — 720×720 Editor</title>
+<style>
+  :root{
+    --bg:#0b0c10;
+    --panel:#111218;
+    --panel-2:#141522;
+    --card:#191a2e;
+    --muted:#9aa0b4;
+    --text:#e7e9f3;
+    --accent:#8e8bff;
+    --accent-2:#ff4fa3;
+    --ok:#34d399;
+    --warn:#f59e0b;
+    --danger:#ef4444;
+    --ring: 0 0 0 3px rgb(142 139 255 / .25);
+    --radius:14px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 800px at -10% -10%, #1a1b2d 0%, transparent 60%),
+      radial-gradient(1600px 1000px at 120% -10%, #1b1230 0%, transparent 60%),
+      linear-gradient(180deg,#0c0d14, #0a0b12 60%, #08090f 100%);
+    color:var(--text);
+    font:500 14px/1.4 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial;
+    letter-spacing:.2px;
+  }
+
+  /* App layout */
+  .app{
+    display:grid;
+    grid-template-columns: 300px 1fr 320px;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "toolbar toolbar toolbar"
+      "left stage right"
+      "footer footer footer";
+    height:100%;
+    gap:14px;
+    padding:14px;
+  }
+
+  .toolbar{
+    grid-area:toolbar;
+    background:linear-gradient(180deg, #161729, #141527);
+    border:1px solid #21223a;
+    border-radius:var(--radius);
+    padding:10px;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    position:sticky; top:0; z-index:10;
+    box-shadow:0 10px 30px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.02);
+  }
+
+  .left{
+    grid-area:left;
+    background:linear-gradient(180deg,#15162a,#131426);
+    border:1px solid #21223a;
+    border-radius:var(--radius);
+    padding:12px;
+    overflow:auto;
+  }
+
+  .right{
+    grid-area:right;
+    background:linear-gradient(180deg,#15162a,#131426);
+    border:1px solid #21223a;
+    border-radius:var(--radius);
+    padding:12px;
+    overflow:auto;
+  }
+
+  .stage-wrap{
+    grid-area:stage;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    border-radius:var(--radius);
+    background:
+      radial-gradient(800px 600px at 60% 0%, rgba(142,139,255,.15), transparent 60%),
+      repeating-conic-gradient(from 45deg, #15162a 0% 25%, #121326 0% 50%) 0/20px 20px;
+    border:1px solid #232444;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 20px 60px rgba(0,0,0,.35);
+    padding:20px;
+    overflow:hidden;
+    min-height:0;
+  }
+
+  .zoomHud{
+    position:absolute; right:16px; bottom:16px;
+    background:#0f1020aa; border:1px solid #2a2b4a; padding:8px 10px; border-radius:10px;
+    display:flex; align-items:center; gap:8px; backdrop-filter: blur(6px); color:var(--muted);
+  }
+  .zoomHud input{ width:140px }
+  .zoomHud b{ color:var(--text); font-weight:800 }
+
+  /* Stage itself */
+  .stage{
+    width:720px; height:720px; position:relative; overflow:hidden; background:#f3f4f6;
+    box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.25);
+    transform-origin: top left;
+  }
+
+  /* Selection outline */
+  .selected-outline{
+    position:absolute; pointer-events:none; border:2px dashed var(--accent);
+    box-shadow: var(--ring); border-radius:6px;
+  }
+
+  /* Panel styles */
+  h3{margin:6px 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.2em; color:#b7bdd3}
+  .card{
+    background:linear-gradient(180deg,#121327,#101123);
+    border:1px solid #262748; border-radius:12px; padding:10px; margin-bottom:12px;
+  }
+  .row{display:flex; gap:8px; align-items:center; margin-top:8px}
+  .row > *{flex:1}
+  label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px}
+  input[type="text"], input[type="number"], input[type="url"], textarea, select{
+    width:100%; background:#0f1122; color:#e6e8f7; border:1px solid #2a2b4a; border-radius:10px;
+    padding:9px 10px; outline:none;
+  }
+  textarea{min-height:90px; resize:vertical}
+  input:focus, textarea:focus, select:focus{ box-shadow:var(--ring); border-color:#4b4ecf }
+
+  .btn{
+    appearance:none; border:1px solid #2a2b4a; background:#0f1122; color:#e7e9f3;
+    padding:9px 12px; border-radius:10px; cursor:pointer; font-weight:800;
+  }
+  .btn:hover{border-color:#3a3cc8}
+  .btn.primary{ background:linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%); border:0; color:white; }
+  .btn.ok{ background:linear-gradient(90deg, #3bd1a3, #73e0a7); border:0; color:#0b1111; }
+  .btn.danger{ background:linear-gradient(90deg, #ef4444, #f97316); border:0; color:white; }
+  .toolbar .btn{ display:inline-flex; align-items:center; gap:8px }
+
+  .footer{
+    grid-area:footer;
+    color:#8087a6;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    padding:6px 4px;
+  }
+
+  .hint{ color:#8d93b2; font-size:12px }
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
+    color:#dfe2ff; background:#181a33; border:1px solid #23244a; font-weight:700; font-size:12px
+  }
+
+  /* Draggable cursor */
+  .draggable{ cursor:move }
+
+  /* Handle contenteditable visuals */
+  [contenteditable="true"]{ outline:2px dashed #9aa0ff; outline-offset:2px; background:#ffffff50 }
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="btn primary" id="btnImportFile"⬆️ Import HTML</button>
+      <button class="btn" id="btnImportPaste">📋 Paste HTML</button>
+      <span class="pill">Canvas: <b>720×720</b></span>
+      <span class="pill">Select: <b id="selName">None</b></span>
+      <div style="flex:1"></div>
+      <button class="btn" id="btnAddText">➕ Text</button>
+      <button class="btn" id="btnAddImage">🖼️ Image</button>
+      <button class="btn danger" id="btnDelete" title="Delete selected (Del)">🗑️ Delete</button>
+      <button class="btn ok" id="btnExport">💾 Export HTML</button>
+      <input type="file" id="hiddenFile" accept=".html,text/html" style="display:none" />
+      <input type="file" id="hiddenImg" accept="image/*" style="display:none" />
+    </div>
+
+    <!-- Left: Import / Presets -->
+    <aside class="left">
+      <h3>Import / Preset</h3>
+      <div class="card">
+        <button class="btn" id="btnPreset">Load Sample Poster</button>
+        <div class="hint" style="margin-top:8px">
+          Tip: You can also drop an <b>.html</b> file onto the canvas.
+        </div>
+      </div>
+
+      <h3>Zoom</h3>
+      <div class="card">
+        <input type="range" id="zoom" min="0.5" max="2" step="0.05" value="1" />
+        <div class="hint">Use slider or <b>Ctrl + Mouse Wheel</b></div>
+      </div>
+
+      <h3>Autosave</h3>
+      <div class="card">
+        <button class="btn" id="btnSaveNow">Save Now</button>
+        <button class="btn" id="btnClearSave">Clear Saved</button>
+        <div class="hint" style="margin-top:8px">Auto-saves when you edit.</div>
+      </div>
+    </aside>
+
+    <!-- Stage -->
+    <main class="stage-wrap" id="stageWrap">
+      <div id="stage" class="stage" tabindex="-1" aria-label="Editable poster stage"></div>
+      <div class="zoomHud"><b id="zoomPct">100%</b> <input type="range" min="0.5" max="2" step="0.05" value="1" id="zoom2" /></div>
+    </main>
+
+    <!-- Right: Properties -->
+    <aside class="right">
+      <h3>Properties</h3>
+      <div class="card">
+        <div class="row">
+          <div>
+            <label>Tag</label>
+            <input type="text" id="propTag" readonly />
+          </div>
+          <div>
+            <label>Class</label>
+            <input type="text" id="propClass" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>X (left px)</label>
+            <input type="number" id="propLeft" />
+          </div>
+          <div>
+            <label>Y (top px)</label>
+            <input type="number" id="propTop" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Width</label>
+            <input type="number" id="propWidth" />
+          </div>
+          <div>
+            <label>Height</label>
+            <input type="number" id="propHeight" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="textProps" style="display:none">
+        <h3>Text</h3>
+        <label>Content</label>
+        <textarea id="propText"></textarea>
+        <div class="row">
+          <div>
+            <label>Font Size (px)</label>
+            <input type="number" id="propFontSize" />
+          </div>
+          <div>
+            <label>Weight</label>
+            <select id="propWeight">
+              <option>400</option><option>500</option><option>600</option>
+              <option>700</option><option>800</option><option>900</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Color</label>
+            <input type="text" id="propColor" placeholder="#111827" />
+          </div>
+          <div>
+            <label>Editable (dbl-click)</label>
+            <select id="propEditable">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="imgProps" style="display:none">
+        <h3>Image</h3>
+        <label>Src (URL)</label>
+        <input type="url" id="propSrc" placeholder="https://..." />
+        <div class="row">
+          <button class="btn" id="btnPickImg">Upload Image…</button>
+          <button class="btn" id="btnApplySrc">Apply URL</button>
+        </div>
+        <div class="hint" style="margin-top:6px">Object Fit forced to <b>cover</b> in sample.</div>
+      </div>
+    </aside>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="hint">🖱️ <b>Drag</b> elements • ⌫ <b>Delete</b> • ⌘/Ctrl + Wheel <b>Zoom</b> • Double-click text to edit</div>
+      <div class="hint">Built-in sanitizer removes script/style & inline events</div>
+    </div>
+  </div>
+
+<script>
+/* ==========================
+   Utilities
+========================== */
+const $ = sel => document.querySelector(sel);
+const stage = $('#stage');
+const stageWrap = $('#stageWrap');
+let selected = null;
+let outlineEl = null;
+let dragState = null;
+
+const LS_KEY = 'poster-editor-v1';
+
+/* Basic sanitizer: strips <script>, <style>, and on* attributes */
+function sanitizeHTML(html){
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  // remove scripts/styles
+  tpl.content.querySelectorAll('script, style').forEach(n => n.remove());
+  // remove event handlers
+  tpl.content.querySelectorAll('*').forEach(el=>{
+    [...el.attributes].forEach(a=>{
+      if(/^on/i.test(a.name)) el.removeAttribute(a.name);
+    });
+  });
+  return tpl.innerHTML;
+}
+
+/* Example preset */
+const SAMPLE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sample Poster</title>
+<style>
+  body { margin: 0; padding: 0; }
+  .poster { width: 720px; height: 720px; position: relative; background: #f3f4f6; overflow: hidden; font-family: Inter, ui-sans-serif, system-ui; }
+  .title { position: absolute; top: 80px; left: 40px; font-size: 56px; font-weight: 900; color: #111827; letter-spacing:.5px }
+  .subtitle { position: absolute; top: 160px; left: 40px; font-size: 22px; color: #374151; }
+  .badge { position:absolute; top: 28px; right: 28px; background:#111827; color:#fff; padding:10px 14px; border-radius:999px; font-weight:800 }
+  .hero { position: absolute; bottom: 0; right: 0; width: 380px; height: 380px; object-fit: cover; border-top-left-radius: 16px; box-shadow:0 20px 40px rgba(0,0,0,.25) }
+</style>
+</head>
+<body>
+  <div class="poster">
+    <div class="badge">Summer • 2025</div>
+    <h1 class="title" contenteditable="true">Summer Sale</h1>
+    <p class="subtitle" contenteditable="true">Up to <strong>50% off</strong> on select items!</p>
+    <img class="hero" src="https://images.unsplash.com/photo-1520975922284-7bcd4290b0e1?q=80&w=1200&auto=format&fit=crop" alt="Model" />
+  </div>
+</body>
+</html>`;
+
+/* Load HTML into stage (into the first element that is 720x720 or create one) */
+function loadPosterHTML(html){
+  const safe = sanitizeHTML(html);
+  // extract <body> contents
+  const doc = new DOMParser().parseFromString(safe, 'text/html');
+  let container = doc.querySelector('.poster');
+  if(!container){
+    // fallback: wrap everything into poster container
+    container = document.createElement('div');
+    container.className = 'poster';
+    container.style.cssText = 'width:720px;height:720px;position:relative;background:#f3f4f6;overflow:hidden;';
+    // move body children
+    [...doc.body.childNodes].forEach(ch => container.appendChild(ch));
+  }
+  // ensure sizing
+  container.style.width = '720px';
+  container.style.height = '720px';
+  container.style.position = 'relative';
+  container.style.overflow = 'hidden';
+
+  stage.innerHTML = '';
+  stage.appendChild(container);
+
+  // make existing absolutely positioned nodes draggable/selectable
+  stage.querySelectorAll('.poster *').forEach(enhanceElement);
+  saveToLocal();
+}
+
+/* Enhance node with interactions */
+function enhanceElement(el){
+  if(!(el instanceof HTMLElement)) return;
+  // ignore container wrapper
+  if(el === stage) return;
+
+  // Ensure absolute for drag poster-style if it has top/left already or it's an img/text we add
+  const cs = getComputedStyle(el);
+  if(cs.position === 'static'){
+    // only force absolute when it visually sits in the poster without flow
+    // if it already has top/left in class styles, browser will report 'absolute'
+  }
+
+  // Drag
+  el.classList.add('draggable');
+  el.addEventListener('mousedown', startDrag);
+  // Select
+  el.addEventListener('click', (e)=>{ e.stopPropagation(); select(el); });
+
+  // Text double-click to edit
+  if(isTextElement(el)){
+    el.addEventListener('dblclick', ()=>{
+      el.setAttribute('contenteditable','true');
+      el.focus();
+    });
+    el.addEventListener('blur', ()=>{
+      // keep contenteditable according to prop panel later; default true if user used dblclick
+    });
+  }
+}
+
+/* Selection */
+function select(el){
+  selected = el;
+  updateOutline();
+  updatePropsPanel();
+  $('#selName').textContent = selected ? selected.tagName.toLowerCase() : 'None';
+}
+function clearSelection(){
+  selected = null;
+  if(outlineEl) outlineEl.remove(), outlineEl=null;
+  updatePropsPanel();
+  $('#selName').textContent = 'None';
+}
+function updateOutline(){
+  if(!selected){ if(outlineEl) outlineEl.remove(); return; }
+  const rect = selected.getBoundingClientRect();
+  const srect = stage.getBoundingClientRect();
+  const x = rect.left - srect.left + stage.scrollLeft;
+  const y = rect.top - srect.top + stage.scrollTop;
+  if(!outlineEl){
+    outlineEl = document.createElement('div');
+    outlineEl.className = 'selected-outline';
+    stage.appendChild(outlineEl);
+  }
+  outlineEl.style.left = x + 'px';
+  outlineEl.style.top = y + 'px';
+  outlineEl.style.width = rect.width + 'px';
+  outlineEl.style.height = rect.height + 'px';
+}
+
+/* Dragging */
+function startDrag(e){
+  if(e.button!==0) return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  select(el);
+
+  const poster = stage.querySelector('.poster');
+  const prect = poster.getBoundingClientRect();
+
+  const cs = getComputedStyle(el);
+  if(cs.position === 'static'){
+    el.style.position='absolute';
+    // map current rect to absolute coords relative to poster
+    const r = el.getBoundingClientRect();
+    el.style.left = (r.left - prect.left) + 'px';
+    el.style.top  = (r.top  - prect.top ) + 'px';
+  }
+
+  const start = {
+    mx: e.clientX,
+    my: e.clientY,
+    left: parseFloat(el.style.left || '0'),
+    top:  parseFloat(el.style.top  || '0')
+  };
+  dragState = {el, start};
+  document.addEventListener('mousemove', onDrag);
+  document.addEventListener('mouseup', endDrag);
+}
+function onDrag(e){
+  if(!dragState) return;
+  const {el, start} = dragState;
+  const dx = e.clientX - start.mx;
+  const dy = e.clientY - start.my;
+  el.style.left = (start.left + dx) + 'px';
+  el.style.top  = (start.top  + dy) + 'px';
+  updateOutline();
+  updateXYInputs();
+}
+function endDrag(){
+  document.removeEventListener('mousemove', onDrag);
+  document.removeEventListener('mouseup', endDrag);
+  dragState = null;
+  saveToLocal();
+}
+
+/* Helpers to identify types */
+function isTextElement(el){
+  const t = el.tagName.toLowerCase();
+  return ['p','h1','h2','h3','h4','h5','h6','span','div','strong','em'].includes(t) && !el.closest('img');
+}
+function isImage(el){ return el && el.tagName && el.tagName.toLowerCase()==='img'; }
+
+/* Properties panel binding */
+const propTag = $('#propTag');
+const propClass = $('#propClass');
+const propLeft = $('#propLeft');
+const propTop = $('#propTop');
+const propWidth = $('#propWidth');
+const propHeight = $('#propHeight');
+
+const textProps = $('#textProps');
+const propText = $('#propText');
+const propFontSize = $('#propFontSize');
+const propWeight = $('#propWeight');
+const propColor = $('#propColor');
+const propEditable = $('#propEditable');
+
+const imgProps = $('#imgProps');
+const propSrc = $('#propSrc');
+
+function updatePropsPanel(){
+  if(!selected){
+    propTag.value='';
+    propClass.value='';
+    [propLeft,propTop,propWidth,propHeight].forEach(i=>i.value='');
+    textProps.style.display='none';
+    imgProps.style.display='none';
+    return;
+  }
+  propTag.value = selected.tagName.toLowerCase();
+  propClass.value = selected.className || '';
+  const r = selected.getBoundingClientRect();
+  const prect = stage.querySelector('.poster').getBoundingClientRect();
+  const left = parseFloat(selected.style.left || r.left - prect.left);
+  const top  = parseFloat(selected.style.top  || r.top  - prect.top );
+  propLeft.value = Math.round(left);
+  propTop.value  = Math.round(top);
+  propWidth.value  = Math.round(parseFloat(selected.style.width  || r.width));
+  propHeight.value = Math.round(parseFloat(selected.style.height || r.height));
+
+  if(isTextElement(selected)){
+    textProps.style.display='';
+    imgProps.style.display='none';
+    propText.value = selected.innerHTML;
+    propFontSize.value = parseInt(getComputedStyle(selected).fontSize) || '';
+    propWeight.value = (getComputedStyle(selected).fontWeight) || '600';
+    propColor.value = rgbToHex(getComputedStyle(selected).color);
+    propEditable.value = selected.getAttribute('contenteditable') === 'true' ? 'true' : 'false';
+  } else if(isImage(selected)){
+    textProps.style.display='none';
+    imgProps.style.display='';
+    propSrc.value = selected.getAttribute('src') || '';
+  } else {
+    textProps.style.display='none';
+    imgProps.style.display='none';
+  }
+}
+
+function rgbToHex(rgb){
+  const m = rgb.match(/\d+/g);
+  if(!m) return rgb;
+  const [r,g,b] = m.map(n=>Math.max(0,Math.min(255,parseInt(n||0))));
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+function applyBasicBox(){
+  if(!selected) return;
+  selected.className = propClass.value.trim();
+  selected.style.left = (parseFloat(propLeft.value)||0) + 'px';
+  selected.style.top  = (parseFloat(propTop.value)||0)  + 'px';
+  if(propWidth.value){ selected.style.width  = parseFloat(propWidth.value)+'px'; }
+  if(propHeight.value){ selected.style.height = parseFloat(propHeight.value)+'px'; }
+  if(getComputedStyle(selected).position === 'static') selected.style.position='absolute';
+  updateOutline();
+  saveToLocal();
+}
+[propClass, propLeft, propTop, propWidth, propHeight].forEach(inp=>{
+  inp.addEventListener('change', applyBasicBox);
+  inp.addEventListener('input', e=>{
+    if(e.target===propLeft||e.target===propTop) applyBasicBox();
+  });
+});
+function updateXYInputs(){
+  if(!selected) return;
+  propLeft.value = Math.round(parseFloat(selected.style.left||'0'));
+  propTop.value  = Math.round(parseFloat(selected.style.top ||'0'));
+}
+
+propText.addEventListener('input', ()=>{
+  if(!selected) return;
+  selected.innerHTML = propText.value;
+  updateOutline();
+  saveToLocal();
+});
+propFontSize.addEventListener('change', ()=>{
+  if(!selected) return;
+  selected.style.fontSize = (parseInt(propFontSize.value)||16) + 'px';
+  updateOutline(); saveToLocal();
+});
+propWeight.addEventListener('change', ()=>{
+  if(!selected) return;
+  selected.style.fontWeight = propWeight.value;
+  saveToLocal();
+});
+propColor.addEventListener('change', ()=>{
+  if(!selected) return;
+  selected.style.color = propColor.value;
+  saveToLocal();
+});
+propEditable.addEventListener('change', ()=>{
+  if(!selected) return;
+  if(propEditable.value==='true') selected.setAttribute('contenteditable','true');
+  else selected.removeAttribute('contenteditable');
+  saveToLocal();
+});
+
+$('#btnApplySrc').addEventListener('click', ()=>{
+  if(selected && isImage(selected) && propSrc.value){
+    selected.src = propSrc.value;
+    saveToLocal();
+  }
+});
+$('#btnPickImg').addEventListener('click', ()=> $('#hiddenImg').click());
+$('#hiddenImg').addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0];
+  if(!selected || !isImage(selected) || !f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{ selected.src = reader.result; saveToLocal(); };
+  reader.readAsDataURL(f);
+});
+
+/* Add elements */
+$('#btnAddText').addEventListener('click', ()=>{
+  const el = document.createElement('div');
+  el.textContent = 'New Text';
+  Object.assign(el.style, {position:'absolute', left:'40px', top:'40px', fontSize:'24px', fontWeight:'800', color:'#111827'});
+  stage.querySelector('.poster').appendChild(el);
+  enhanceElement(el);
+  select(el);
+  saveToLocal();
+});
+$('#btnAddImage').addEventListener('click', ()=>{
+  const img = document.createElement('img');
+  Object.assign(img.style, {position:'absolute', left:'360px', top:'360px', width:'220px', height:'220px', objectFit:'cover', borderRadius:'12px', boxShadow:'0 10px 30px rgba(0,0,0,.25)'});
+  img.alt = 'Image';
+  img.src = 'https://picsum.photos/seed/poster/600/600';
+  stage.querySelector('.poster').appendChild(img);
+  enhanceElement(img);
+  select(img);
+  saveToLocal();
+});
+
+/* Delete */
+function deleteSelected(){
+  if(!selected) return;
+  const nextFocus = selected.parentElement;
+  selected.remove();
+  clearSelection();
+  if(nextFocus) select(nextFocus.closest('.poster *'));
+  saveToLocal();
+}
+$('#btnDelete').addEventListener('click', deleteSelected);
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Delete' && selected){
+    e.preventDefault(); deleteSelected();
+  }
+});
+
+/* Import: file */
+$('#btnImportFile').addEventListener('click', ()=> $('#hiddenFile').click());
+$('#hiddenFile').addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0];
+  if(!f) return;
+  const text = await f.text();
+  loadPosterHTML(text);
+});
+/* Import: paste */
+$('#btnImportPaste').addEventListener('click', async ()=>{
+  const html = prompt('Paste raw HTML (full page or fragment):');
+  if(html && html.trim()){
+    loadPosterHTML(html);
+  }
+});
+/* Preset */
+$('#btnPreset').addEventListener('click', ()=> loadPosterHTML(SAMPLE_HTML));
+
+/* Drop file on stageWrap */
+stageWrap.addEventListener('dragover', e=>{ e.preventDefault(); });
+stageWrap.addEventListener('drop', async (e)=>{
+  e.preventDefault();
+  const f = [...e.dataTransfer.files][0];
+  if(!f) return;
+  if(f.type.includes('html') || f.name.endsWith('.html')){
+    loadPosterHTML(await f.text());
+  }
+});
+
+/* Export */
+$('#btnExport').addEventListener('click', ()=>{
+  const poster = stage.querySelector('.poster');
+  if(!poster){ alert('Nothing to export'); return; }
+
+  // Inline poster HTML
+  const serializer = poster.cloneNode(true);
+  // Remove selection outline if any
+  serializer.querySelectorAll('.selected-outline').forEach(n=>n.remove());
+
+  const exportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Exported Poster</title>
+<meta data-generated-by="editable-html-poster" />
+<style>
+  body{margin:0;padding:0;background:#111}
+  .poster{width:720px;height:720px;position:relative;overflow:hidden;margin:0 auto;background:#f3f4f6}
+</style>
+</head>
+<body>
+${(() => { serializer.classList.add('poster'); return serializer.outerHTML; })()}
+</body>
+</html>`;
+
+  const blob = new Blob([exportHtml], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), {href:url, download:'poster.html'});
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* Stage interaction */
+stage.addEventListener('click', (e)=>{
+  if(e.target === stage || e.target === stage.querySelector('.poster')){ clearSelection(); }
+});
+
+/* Resize observer to keep outline synced */
+new ResizeObserver(()=> updateOutline()).observe(stage);
+
+/* Zoom */
+const zoom1 = $('#zoom');
+const zoom2 = $('#zoom2');
+const zoomPct = $('#zoomPct');
+function setZoom(val){
+  const v = Math.max(.5, Math.min(2, parseFloat(val)||1));
+  stage.style.transform = `scale(${v})`;
+  zoom1.value = v; zoom2.value = v; zoomPct.textContent = Math.round(v*100)+'%';
+}
+zoom1.addEventListener('input', e=> setZoom(e.target.value));
+zoom2.addEventListener('input', e=> setZoom(e.target.value));
+stageWrap.addEventListener('wheel', (e)=>{
+  if(!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  const v = parseFloat(zoom1.value) + (e.deltaY < 0 ? 0.05 : -0.05);
+  setZoom(v);
+}, {passive:false});
+
+/* Save / Restore */
+function saveToLocal(){
+  const poster = stage.querySelector('.poster');
+  if(!poster) return;
+  localStorage.setItem(LS_KEY, poster.outerHTML);
+}
+function restoreFromLocal(){
+  const data = localStorage.getItem(LS_KEY);
+  if(data){
+    const html = `<!doctype html><html><body>${data}</body></html>`;
+    loadPosterHTML(html);
+  } else {
+    loadPosterHTML(SAMPLE_HTML);
+  }
+}
+$('#btnSaveNow').addEventListener('click', saveToLocal);
+$('#btnClearSave').addEventListener('click', ()=>{
+  localStorage.removeItem(LS_KEY);
+  alert('Saved state cleared.');
+});
+
+window.addEventListener('load', restoreFromLocal);
+window.addEventListener('resize', updateOutline);
+
+/* Keep stage clicks from blurring edits incorrectly */
+document.addEventListener('click', (e)=>{
+  if(selected && !stage.contains(e.target)) updateOutline();
+});
+
+/* End */
+</script>
+</body>
+</html>
